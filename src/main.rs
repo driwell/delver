@@ -2,6 +2,8 @@ use bevy::{prelude::*, window::WindowMode};
 
 const PLAYER_SPEED: f32 = 150.;
 
+const CAMERA_DECAY_RATE: f32 = 2.;
+
 #[derive(Component)]
 struct Player;
 
@@ -16,7 +18,7 @@ fn main() {
             ..default()
         }))
         .add_systems(Startup, (setup_scene, setup_camera))
-        .add_systems(Update, move_player)
+        .add_systems(Update, (move_player, update_camera).chain())
         .run();
 }
 
@@ -71,4 +73,27 @@ fn move_player(
 
     let move_delta = direction.normalize_or_zero() * PLAYER_SPEED * time.delta_secs();
     player.translation += move_delta.extend(0.);
+}
+
+fn update_camera(
+    mut camera: Query<&mut Transform, (With<Camera2d>, Without<Player>)>,
+    player: Query<&Transform, (With<Player>, Without<Camera2d>)>,
+    time: Res<Time>,
+) {
+    let Ok(mut camera) = camera.get_single_mut() else {
+        return;
+    };
+
+    let Ok(player) = player.get_single() else {
+        return;
+    };
+
+    let Vec3 { x, y, .. } = player.translation;
+    let direction = Vec3::new(x, y, camera.translation.z);
+
+    // Applies a smooth effect to camera movement using stable interpolation
+    // between the camera position and the player position on the x and y axes.
+    camera
+        .translation
+        .smooth_nudge(&direction, CAMERA_DECAY_RATE, time.delta_secs());
 }
